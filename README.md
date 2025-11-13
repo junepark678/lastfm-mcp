@@ -254,7 +254,7 @@ Last.fm API has rate limits:
 
 ## License
 
-MIT
+AGPL-3.0 - See LICENSE file for details
 
 ## Contributing
 
