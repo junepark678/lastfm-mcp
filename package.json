@@ -13,6 +13,7 @@
     "@cloudflare/codemode": "^0.3.4",
     "@modelcontextprotocol/sdk": "^1.20.2",
     "agents": "^0.10.0",
+    "quickjs-wasi": "^2.2.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
