@@ -6,6 +6,9 @@ compatibility_date = "2026-04-08"
 LASTFM_API_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
 LASTFM_USER_AGENT = "lastfm-mcp-worker/0.1.0"
 
+[secrets]
+required = [ "LASTFM_API_KEY" ]
+
 [observability]
 enabled = false
 head_sampling_rate = 1
