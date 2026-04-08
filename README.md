@@ -15,6 +15,17 @@ Allowed Last.fm methods:
 - `tag.getTopTracks`
 - `chart.getTopArtists`
 - `geo.getTopArtists`
+- `user.getInfo`
+- `user.getRecentTracks`
+- `user.getTopAlbums`
+- `user.getTopArtists`
+- `user.getTopTracks`
+- `user.getLovedTracks`
+- `user.getFriends`
+- `user.getWeeklyAlbumChart`
+- `user.getWeeklyArtistChart`
+- `user.getWeeklyTrackChart`
+- `user.getWeeklyChartList`
 
 Any method outside this allowlist is rejected.
 
@@ -28,13 +39,25 @@ Any method outside this allowlist is rejected.
 - `chart_get_top_artists`
 - `tag_get_top_tracks`
 - `geo_get_top_artists`
+- `user_get_info`
+- `user_get_recent_tracks`
+- `user_get_top_albums`
+- `user_get_top_artists`
+- `user_get_top_tracks`
+- `user_get_loved_tracks`
+- `user_get_friends`
+- `user_get_weekly_album_chart`
+- `user_get_weekly_artist_chart`
+- `user_get_weekly_track_chart`
+- `user_get_weekly_chart_list`
 
 List/search/chart tools support bounded pagination:
 - `page >= 1`
 - `limit >= 1`
 - effective `limit` is clamped to `MAX_PAGE_SIZE` (default `100`)
 
-Info tools support `username` for (`artist_get_info`, `track_get_info`, `album_get_info`). If the incoming MCP HTTP request includes `?username=<value>`, the `username` tool argument is optional and that query-string username is used by default; otherwise `username` is required in the tool input.
+Info tools support `username` for (`artist_get_info`, `track_get_info`, `album_get_info`). User tools support `user`.
+If the incoming MCP HTTP request includes `?username=<value>`, the `username`/`user` tool argument is optional and that query-string username is used by default; otherwise it is required in the tool input.
 
 All exposed tools are annotated as read-only and non-destructive (`readOnlyHint: true`, `destructiveHint: false`).
 

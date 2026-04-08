@@ -24,6 +24,17 @@ const PUBLIC_METHOD_ALLOWLIST = new Set([
   "tag.getTopTracks",
   "chart.getTopArtists",
   "geo.getTopArtists",
+  "user.getInfo",
+  "user.getRecentTracks",
+  "user.getTopAlbums",
+  "user.getTopArtists",
+  "user.getTopTracks",
+  "user.getLovedTracks",
+  "user.getFriends",
+  "user.getWeeklyAlbumChart",
+  "user.getWeeklyArtistChart",
+  "user.getWeeklyTrackChart",
+  "user.getWeeklyChartList",
 ]);
 
 export class LastfmClient {

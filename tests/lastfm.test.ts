@@ -16,6 +16,8 @@ describe("LastfmClient allowlist", () => {
   it("allows public methods", () => {
     expect(client.isMethodAllowed("artist.search")).toBe(true);
     expect(client.isMethodAllowed("track.getInfo")).toBe(true);
+    expect(client.isMethodAllowed("user.getRecentTracks")).toBe(true);
+    expect(client.isMethodAllowed("user.getWeeklyChartList")).toBe(true);
   });
 
   it("rejects auth methods", async () => {
