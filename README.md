@@ -15,6 +15,17 @@ Allowed Last.fm methods:
 - `tag.getTopTracks`
 - `chart.getTopArtists`
 - `geo.getTopArtists`
+- `user.getInfo`
+- `user.getRecentTracks`
+- `user.getTopAlbums`
+- `user.getTopArtists`
+- `user.getTopTracks`
+- `user.getLovedTracks`
+- `user.getFriends`
+- `user.getWeeklyAlbumChart`
+- `user.getWeeklyArtistChart`
+- `user.getWeeklyTrackChart`
+- `user.getWeeklyChartList`
 
 Any method outside this allowlist is rejected.
 
@@ -28,6 +39,17 @@ Any method outside this allowlist is rejected.
 - `chart_get_top_artists`
 - `tag_get_top_tracks`
 - `geo_get_top_artists`
+- `user_get_info`
+- `user_get_recent_tracks`
+- `user_get_top_albums`
+- `user_get_top_artists`
+- `user_get_top_tracks`
+- `user_get_loved_tracks`
+- `user_get_friends`
+- `user_get_weekly_album_chart`
+- `user_get_weekly_artist_chart`
+- `user_get_weekly_track_chart`
+- `user_get_weekly_chart_list`
 
 List/search/chart tools support bounded pagination:
 - `page >= 1`

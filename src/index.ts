@@ -20,11 +20,20 @@ export function createUsernameSchema(usernameFromQuery?: string) {
   return z.string().min(1);
 }
 
+function createUserSchema(usernameFromQuery?: string) {
+  if (usernameFromQuery) {
+    return z.string().min(1).optional();
+  }
+
+  return z.string().min(1);
+}
+
 function createServer(env: Env, usernameFromQuery?: string) {
   const config = loadConfig(env);
   const server = new McpServer({ name: "lastfm-public-mcp", version: "0.2.0" });
   const client = new LastfmClient(config);
   const usernameSchema = createUsernameSchema(usernameFromQuery);
+  const userSchema = createUserSchema(usernameFromQuery);
 
   server.tool("artist_search", "Search public artists by name.", {
     artist: z.string().min(1),
@@ -95,6 +104,98 @@ function createServer(env: Env, usernameFromQuery?: string) {
     const pagination = resolvePagination({ page, limit }, config);
     return client.call("geo.getTopArtists", { country, ...pagination });
   }));
+
+  server.tool("user_get_info", "Get public profile info for a user.", {
+    user: userSchema,
+  }, READ_ONLY_TOOL_HINTS, async ({ user }) => safeToolCall(async () =>
+    client.call("user.getInfo", { user: user ?? usernameFromQuery })));
+
+  server.tool("user_get_recent_tracks", "Get a user's recent tracks.", {
+    user: userSchema,
+    from: z.number().int().positive().optional(),
+    to: z.number().int().positive().optional(),
+    extended: z.number().int().min(0).max(1).default(0),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).default(config.defaultPageSize),
+  }, READ_ONLY_TOOL_HINTS, async ({ user, from, to, extended, page, limit }) => safeToolCall(async () => {
+    const pagination = resolvePagination({ page, limit }, config);
+    return client.call("user.getRecentTracks", { user: user ?? usernameFromQuery, from, to, extended, ...pagination });
+  }));
+
+  server.tool("user_get_top_albums", "Get a user's top albums.", {
+    user: userSchema,
+    period: z.enum(["overall", "7day", "1month", "3month", "6month", "12month"]).default("overall"),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).default(config.defaultPageSize),
+  }, READ_ONLY_TOOL_HINTS, async ({ user, period, page, limit }) => safeToolCall(async () => {
+    const pagination = resolvePagination({ page, limit }, config);
+    return client.call("user.getTopAlbums", { user: user ?? usernameFromQuery, period, ...pagination });
+  }));
+
+  server.tool("user_get_top_artists", "Get a user's top artists.", {
+    user: userSchema,
+    period: z.enum(["overall", "7day", "1month", "3month", "6month", "12month"]).default("overall"),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).default(config.defaultPageSize),
+  }, READ_ONLY_TOOL_HINTS, async ({ user, period, page, limit }) => safeToolCall(async () => {
+    const pagination = resolvePagination({ page, limit }, config);
+    return client.call("user.getTopArtists", { user: user ?? usernameFromQuery, period, ...pagination });
+  }));
+
+  server.tool("user_get_top_tracks", "Get a user's top tracks.", {
+    user: userSchema,
+    period: z.enum(["overall", "7day", "1month", "3month", "6month", "12month"]).default("overall"),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).default(config.defaultPageSize),
+  }, READ_ONLY_TOOL_HINTS, async ({ user, period, page, limit }) => safeToolCall(async () => {
+    const pagination = resolvePagination({ page, limit }, config);
+    return client.call("user.getTopTracks", { user: user ?? usernameFromQuery, period, ...pagination });
+  }));
+
+  server.tool("user_get_loved_tracks", "Get a user's loved tracks.", {
+    user: userSchema,
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).default(config.defaultPageSize),
+  }, READ_ONLY_TOOL_HINTS, async ({ user, page, limit }) => safeToolCall(async () => {
+    const pagination = resolvePagination({ page, limit }, config);
+    return client.call("user.getLovedTracks", { user: user ?? usernameFromQuery, ...pagination });
+  }));
+
+  server.tool("user_get_friends", "Get a user's friends.", {
+    user: userSchema,
+    recenttracks: z.number().int().min(0).max(1).default(0),
+    page: z.number().int().min(1).default(1),
+    limit: z.number().int().min(1).default(config.defaultPageSize),
+  }, READ_ONLY_TOOL_HINTS, async ({ user, recenttracks, page, limit }) => safeToolCall(async () => {
+    const pagination = resolvePagination({ page, limit }, config);
+    return client.call("user.getFriends", { user: user ?? usernameFromQuery, recenttracks, ...pagination });
+  }));
+
+  server.tool("user_get_weekly_album_chart", "Get a user's weekly album chart.", {
+    user: userSchema,
+    from: z.number().int().positive().optional(),
+    to: z.number().int().positive().optional(),
+  }, READ_ONLY_TOOL_HINTS, async ({ user, from, to }) => safeToolCall(async () =>
+    client.call("user.getWeeklyAlbumChart", { user: user ?? usernameFromQuery, from, to })));
+
+  server.tool("user_get_weekly_artist_chart", "Get a user's weekly artist chart.", {
+    user: userSchema,
+    from: z.number().int().positive().optional(),
+    to: z.number().int().positive().optional(),
+  }, READ_ONLY_TOOL_HINTS, async ({ user, from, to }) => safeToolCall(async () =>
+    client.call("user.getWeeklyArtistChart", { user: user ?? usernameFromQuery, from, to })));
+
+  server.tool("user_get_weekly_track_chart", "Get a user's weekly track chart.", {
+    user: userSchema,
+    from: z.number().int().positive().optional(),
+    to: z.number().int().positive().optional(),
+  }, READ_ONLY_TOOL_HINTS, async ({ user, from, to }) => safeToolCall(async () =>
+    client.call("user.getWeeklyTrackChart", { user: user ?? usernameFromQuery, from, to })));
+
+  server.tool("user_get_weekly_chart_list", "Get available weekly chart ranges for a user.", {
+    user: userSchema,
+  }, READ_ONLY_TOOL_HINTS, async ({ user }) => safeToolCall(async () =>
+    client.call("user.getWeeklyChartList", { user: user ?? usernameFromQuery })));
 
   return server;
 }
