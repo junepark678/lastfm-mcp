@@ -1,5 +1,4 @@
 import { createMcpHandler } from "agents/mcp";
-import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { codeMcpServer } from "@cloudflare/codemode/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -7,10 +6,9 @@ import { createUserSchema, createUsernameSchema } from "./schemas";
 import { loadConfig, type EnvLike } from "./config";
 import { LastfmApiError, LastfmClient } from "./lastfm";
 import { resolvePagination } from "./models";
+import { QuickJsWasmExecutor } from "./quickjs-executor";
 
-interface Env extends EnvLike {
-  LOADER: any;
-}
+type Env = EnvLike;
 
 const READ_ONLY_TOOL_HINTS = {
   readOnlyHint: true,
@@ -222,7 +220,7 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const usernameFromQuery = new URL(request.url).searchParams.get("username") ?? undefined;
     const upstreamServer = createServer(env, usernameFromQuery);
-    const executor = new DynamicWorkerExecutor({ loader: env.LOADER });
+    const executor = new QuickJsWasmExecutor();
     const server = await codeMcpServer({ server: upstreamServer, executor });
     return createMcpHandler(server)(request, env, ctx);
   },
