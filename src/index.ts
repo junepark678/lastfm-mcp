@@ -15,6 +15,11 @@ const READ_ONLY_TOOL_HINTS = {
   destructiveHint: false,
 } as const;
 
+const PUBLIC_READ_ONLY_TOOL_HINTS = {
+  ...READ_ONLY_TOOL_HINTS,
+  openWorldHint: true,
+} as const;
+
 function createServer(env: Env, usernameFromQuery?: string) {
   const config = loadConfig(env);
   const server = new McpServer({ name: "lastfm-public-mcp", version: "0.3.0" });
@@ -218,10 +223,25 @@ function toolResult(data: unknown) {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const usernameFromQuery = new URL(request.url).searchParams.get("username") ?? undefined;
+    const requestUrl = (() => {
+      try {
+        return new URL(request.url);
+      } catch {
+        return new URL(request.url, "http://localhost");
+      }
+    })();
+    const usernameFromQuery = requestUrl.searchParams.get("username") ?? undefined;
     const upstreamServer = createServer(env, usernameFromQuery);
     const executor = new QuickJsWasmExecutor();
     const server = await codeMcpServer({ server: upstreamServer, executor });
+    const registeredCodeTool = (server as unknown as { _registeredTools?: Record<string, { annotations?: Record<string, boolean> }> })
+      ._registeredTools?.code;
+    if (registeredCodeTool) {
+      registeredCodeTool.annotations = {
+        ...registeredCodeTool.annotations,
+        ...PUBLIC_READ_ONLY_TOOL_HINTS,
+      };
+    }
     return createMcpHandler(server)(request, env, ctx);
   },
 };

@@ -35,6 +35,7 @@ Any method outside this allowlist is rejected.
 
 This server exposes only one external MCP tool:
 - `code`
+  - Annotated as public read-only and non-destructive (`readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: true`)
 
 Internally, the `code` tool can call the Last.fm public tools listed below as typed `codemode.*` methods:
 - `artist_search`

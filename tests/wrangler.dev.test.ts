@@ -70,7 +70,12 @@ describe("wrangler local development", () => {
 
     expect(toolsListResponse.status).toBe(200);
     const toolsListBody = await parseMcpResponse(toolsListResponse);
-    const toolNames = ((toolsListBody.result?.tools as Array<{ name?: string }> | undefined) ?? []).map((tool) => tool.name);
+    const tools = (toolsListBody.result?.tools as Array<{ name?: string; annotations?: Record<string, boolean> }> | undefined) ?? [];
+    const toolNames = tools.map((tool) => tool.name);
     expect(toolNames).toContain("code");
+    const codeTool = tools.find((tool) => tool.name === "code");
+    expect(codeTool?.annotations?.readOnlyHint).toBe(true);
+    expect(codeTool?.annotations?.destructiveHint).toBe(false);
+    expect(codeTool?.annotations?.openWorldHint).toBe(true);
   }, 30_000);
 });
