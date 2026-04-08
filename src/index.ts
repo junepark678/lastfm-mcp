@@ -12,10 +12,19 @@ const READ_ONLY_TOOL_HINTS = {
   destructiveHint: false,
 } as const;
 
-function createServer(env: Env) {
+export function createUsernameSchema(usernameFromQuery?: string) {
+  if (usernameFromQuery) {
+    return z.string().min(1).optional();
+  }
+
+  return z.string().min(1);
+}
+
+function createServer(env: Env, usernameFromQuery?: string) {
   const config = loadConfig(env);
   const server = new McpServer({ name: "lastfm-public-mcp", version: "0.2.0" });
   const client = new LastfmClient(config);
+  const usernameSchema = createUsernameSchema(usernameFromQuery);
 
   server.tool("artist_search", "Search public artists by name.", {
     artist: z.string().min(1),
@@ -28,11 +37,11 @@ function createServer(env: Env) {
 
   server.tool("artist_get_info", "Get public info for an artist.", {
     artist: z.string().min(1),
-    username: z.string().min(1).optional(),
+    username: usernameSchema,
     autocorrect: z.number().int().min(0).max(1).default(1),
     lang: z.string().optional(),
   }, READ_ONLY_TOOL_HINTS, async ({ artist, username, autocorrect, lang }) => safeToolCall(async () =>
-    client.call("artist.getInfo", { artist, username, autocorrect, lang })));
+    client.call("artist.getInfo", { artist, username: username ?? usernameFromQuery, autocorrect, lang })));
 
   server.tool("track_search", "Search public tracks by name.", {
     track: z.string().min(1),
@@ -47,19 +56,19 @@ function createServer(env: Env) {
   server.tool("track_get_info", "Get public info for a track.", {
     track: z.string().min(1),
     artist: z.string().min(1),
-    username: z.string().min(1).optional(),
+    username: usernameSchema,
     autocorrect: z.number().int().min(0).max(1).default(1),
   }, READ_ONLY_TOOL_HINTS, async ({ track, artist, username, autocorrect }) => safeToolCall(async () =>
-    client.call("track.getInfo", { track, artist, username, autocorrect })));
+    client.call("track.getInfo", { track, artist, username: username ?? usernameFromQuery, autocorrect })));
 
   server.tool("album_get_info", "Get public info for an album.", {
     artist: z.string().min(1),
     album: z.string().min(1),
-    username: z.string().min(1).optional(),
+    username: usernameSchema,
     autocorrect: z.number().int().min(0).max(1).default(1),
     lang: z.string().optional(),
   }, READ_ONLY_TOOL_HINTS, async ({ artist, album, username, autocorrect, lang }) => safeToolCall(async () =>
-    client.call("album.getInfo", { artist, album, username, autocorrect, lang })));
+    client.call("album.getInfo", { artist, album, username: username ?? usernameFromQuery, autocorrect, lang })));
 
   server.tool("chart_get_top_artists", "Get top artists from Last.fm public charts.", {
     page: z.number().int().min(1).default(1),
@@ -121,12 +130,13 @@ function toolResult(data: unknown) {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const usernameFromQuery = new URL(request.url).searchParams.get("username") ?? undefined;
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
 
-    const server = createServer(env);
+    const server = createServer(env, usernameFromQuery);
     await server.connect(transport);
 
     try {
