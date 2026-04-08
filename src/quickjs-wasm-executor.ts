@@ -13,7 +13,28 @@ type ResolvedProvider = {
   positionalArgs?: boolean;
 };
 
-const cloudflareVariant = newVariant(baseVariant, {
+const workerdSafeBaseVariant = {
+  ...baseVariant,
+  importModuleLoader: async () => {
+    const globalWithProcess = globalThis as typeof globalThis & { process?: unknown };
+    const originalProcess = globalWithProcess.process;
+    const hadOwnProcess = Object.prototype.hasOwnProperty.call(globalWithProcess, "process");
+
+    try {
+      if (hadOwnProcess) {
+        delete globalWithProcess.process;
+      }
+      const moduleLoader = await baseVariant.importModuleLoader();
+      return moduleLoader;
+    } finally {
+      if (hadOwnProcess) {
+        globalWithProcess.process = originalProcess;
+      }
+    }
+  }
+};
+
+const cloudflareVariant = newVariant(workerdSafeBaseVariant, {
   wasmModule,
   wasmSourceMapData,
 });
