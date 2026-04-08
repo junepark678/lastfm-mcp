@@ -1,8 +1,6 @@
-# lastfm-mcp (Cloudflare Agents SDK + Codemode)
+# lastfm-mcp (Cloudflare Workers)
 
-A public-only Last.fm MCP server designed for the Cloudflare Agents SDK.
-
-This deployment wraps the Last.fm MCP toolset in Cloudflare Codemode and exposes only a single `code` tool to MCP clients.
+A public-only Last.fm MCP server designed to run on Cloudflare Workers over Streamable HTTP.
 
 ## Public-only scope
 
@@ -33,10 +31,6 @@ Any method outside this allowlist is rejected.
 
 ## MCP tools
 
-This server exposes only one external MCP tool:
-- `code`
-
-Internally, the `code` tool can call the Last.fm public tools listed below as typed `codemode.*` methods:
 - `artist_search`
 - `artist_get_info`
 - `track_search`
@@ -64,19 +58,18 @@ List/search/chart tools support bounded pagination:
 
 ### Username behavior for info tools
 
-Applies to: `artist_get_info`, `track_get_info`, `album_get_info` (used internally by `code`).
+Applies to: `artist_get_info`, `track_get_info`, `album_get_info`.
 
 - If the incoming MCP HTTP request URI contains `?username=<value>`, the tool `username` field is **optional**.
 - If the request URI does **not** contain a `username` query parameter, the tool `username` field is **required**.
 - If both are provided, the tool input `username` value takes precedence over the query-string value.
 
-All internal Last.fm tools are annotated as read-only and non-destructive (`readOnlyHint: true`, `destructiveHint: false`).
+All exposed tools are annotated as read-only and non-destructive (`readOnlyHint: true`, `destructiveHint: false`).
 
 ## Environment variables
 
 Required:
 - `LASTFM_API_KEY`
-- `LOADER` Worker Loader binding (configured in `wrangler.toml`)
 
 Optional:
 - `LASTFM_API_BASE_URL` (default `https://ws.audioscrobbler.com/2.0/`)

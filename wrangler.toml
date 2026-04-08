@@ -23,6 +23,3 @@ invocation_logs = true
 enabled = true
 persist = true
 head_sampling_rate = 1
-
-worker_loaders = [{ binding = "LOADER" }]
-compatibility_flags = ["nodejs_compat"]
