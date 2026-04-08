@@ -6,7 +6,7 @@ import { createUserSchema, createUsernameSchema } from "./schemas";
 import { loadConfig, type EnvLike } from "./config";
 import { LastfmApiError, LastfmClient } from "./lastfm";
 import { resolvePagination } from "./models";
-import { QuickJsWasmExecutor } from "./quickjs-executor";
+import { QuickJsWasmExecutor } from "./quickjs-wasm-executor";
 
 type Env = EnvLike;
 
