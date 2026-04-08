@@ -1,5 +1,8 @@
 import { normalizeCode, sanitizeToolName, type Executor } from "@cloudflare/codemode";
-import { getQuickJSWASMModule } from "@cf-wasm/quickjs/workerd";
+import { RELEASE_SYNC as baseVariant, newQuickJSWASMModule } from "quickjs-emscripten";
+import { newVariant } from "quickjs-emscripten-core";
+import wasmModule from "./RELEASE_SYNC.wasm";
+import browserModuleLoader from "./RELEASE_SYNC.emscripten.browser.mjs";
 
 type ExecuteResult = Awaited<ReturnType<Executor["execute"]>>;
 type ProviderArg = Parameters<Executor["execute"]>[1];
@@ -9,6 +12,34 @@ type ResolvedProvider = {
   fns: Record<string, (...args: unknown[]) => Promise<unknown>>;
   positionalArgs?: boolean;
 };
+
+const workerdSafeBaseVariant: typeof baseVariant = {
+  ...baseVariant,
+  importModuleLoader: async () => {
+    const globalWithProcess = globalThis as typeof globalThis & { process?: unknown };
+    const baseModuleLoader = browserModuleLoader;
+
+    return (async (moduleArg?: unknown) => {
+      const hadOwnProcess = Object.prototype.hasOwnProperty.call(globalWithProcess, "process");
+      const originalProcess = globalWithProcess.process;
+
+      try {
+        if (hadOwnProcess) {
+          delete globalWithProcess.process;
+        }
+        return await baseModuleLoader(moduleArg);
+      } finally {
+        if (hadOwnProcess) {
+          globalWithProcess.process = originalProcess;
+        }
+      }
+    }) as Awaited<ReturnType<typeof baseVariant.importModuleLoader>>;
+  },
+};
+
+const cloudflareVariant = newVariant(workerdSafeBaseVariant, {
+  wasmModule,
+});
 
 export class QuickJsWasmExecutor implements Executor {
   #timeout: number;
@@ -20,7 +51,7 @@ export class QuickJsWasmExecutor implements Executor {
   async execute(code: string, providersOrFns: ProviderArg): Promise<ExecuteResult> {
     const providers = this.#normalizeProviders(providersOrFns);
     const normalizedCode = normalizeCode(code);
-    const quickjs = await getQuickJSWASMModule();
+    const quickjs = await newQuickJSWASMModule(cloudflareVariant);
     const vm = quickjs.newContext();
     const hostTasks = new Set<Promise<void>>();
 
