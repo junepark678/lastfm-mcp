@@ -1,5 +1,5 @@
 import { normalizeCode, sanitizeToolName, type Executor } from "@cloudflare/codemode";
-import { newAsyncContext } from "quickjs-emscripten";
+import { getQuickJSWASMModule } from "@cf-wasm/quickjs/workerd";
 
 type ExecuteResult = Awaited<ReturnType<Executor["execute"]>>;
 type ProviderArg = Parameters<Executor["execute"]>[1];
@@ -20,10 +20,12 @@ export class QuickJsWasmExecutor implements Executor {
   async execute(code: string, providersOrFns: ProviderArg): Promise<ExecuteResult> {
     const providers = this.#normalizeProviders(providersOrFns);
     const normalizedCode = normalizeCode(code);
-    const vm = await newAsyncContext();
+    const quickjs = await getQuickJSWASMModule();
+    const vm = quickjs.newContext();
+    const hostTasks = new Set<Promise<void>>();
 
     try {
-      const hostCall = vm.newAsyncifiedFunction("__hostCall", async (...rawArgs) => {
+      const hostCall = vm.newFunction("__hostCall", (...rawArgs) => {
         const [providerHandle, toolHandle, payloadHandle] = rawArgs;
         const providerName = providerHandle ? String(vm.dump(providerHandle)) : "";
         const toolName = toolHandle ? String(vm.dump(toolHandle)) : "";
@@ -39,13 +41,24 @@ export class QuickJsWasmExecutor implements Executor {
           return vm.newString(JSON.stringify({ error: `Unknown tool: ${providerName}.${toolName}` }));
         }
 
-        try {
-          const result = provider.positionalArgs ? await fn(...(Array.isArray(payload) ? payload : [])) : await fn(payload ?? {});
-          return vm.newString(JSON.stringify({ result }));
-        } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : String(error);
-          return vm.newString(JSON.stringify({ error: message }));
-        }
+        const deferred = vm.newPromise();
+        const task = (async () => {
+          try {
+            const result = provider.positionalArgs ? await fn(...(Array.isArray(payload) ? payload : [])) : await fn(payload ?? {});
+            const response = vm.newString(JSON.stringify({ result }));
+            deferred.resolve(response);
+            response.dispose();
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            const response = vm.newString(JSON.stringify({ error: message }));
+            deferred.resolve(response);
+            response.dispose();
+          }
+        })();
+        hostTasks.add(task);
+        task.finally(() => hostTasks.delete(task));
+
+        return deferred.handle;
       });
 
       vm.setProp(vm.global, "__hostCall", hostCall);
@@ -101,15 +114,41 @@ export class QuickJsWasmExecutor implements Executor {
         })();
       `;
 
-      const evalResult = await vm.evalCodeAsync(runtimeCode, "executor.js");
+      const evalResult = vm.evalCode(runtimeCode, "executor.js");
       if (evalResult.error) {
         const error = String(vm.dump(evalResult.error));
         evalResult.error.dispose();
         return { result: undefined, error };
       }
 
-      const resolved = await vm.resolvePromise(evalResult.value);
+      let resolved: Awaited<ReturnType<typeof vm.resolvePromise>> | undefined;
+      let resolveError: unknown;
+      vm.resolvePromise(evalResult.value)
+        .then((value) => { resolved = value; })
+        .catch((error: unknown) => { resolveError = error; });
+
+      const deadline = Date.now() + this.#timeout;
+      while (!resolved && !resolveError && Date.now() < deadline) {
+        const pending = vm.runtime.executePendingJobs();
+        if (pending.error) {
+          const error = String(vm.dump(pending.error));
+          pending.error.dispose();
+          evalResult.value.dispose();
+          return { result: undefined, error };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
       evalResult.value.dispose();
+
+      if (resolveError) {
+        return {
+          result: undefined,
+          error: resolveError instanceof Error ? resolveError.message : String(resolveError),
+        };
+      }
+      if (!resolved) {
+        return { result: undefined, error: "Execution timed out" };
+      }
 
       if (resolved.error) {
         const error = String(vm.dump(resolved.error));
@@ -131,6 +170,19 @@ export class QuickJsWasmExecutor implements Executor {
         error: error instanceof Error ? error.message : String(error),
       };
     } finally {
+      if (hostTasks.size > 0) {
+        await Promise.allSettled([...hostTasks]);
+      }
+      for (let i = 0; i < 5; i += 1) {
+        const pending = vm.runtime.executePendingJobs();
+        if (pending.error) {
+          pending.error.dispose();
+          break;
+        }
+        if ((pending.value ?? 0) === 0) {
+          break;
+        }
+      }
       vm.dispose();
     }
   }
