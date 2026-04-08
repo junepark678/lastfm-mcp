@@ -34,6 +34,16 @@ List/search/chart tools support bounded pagination:
 - `limit >= 1`
 - effective `limit` is clamped to `MAX_PAGE_SIZE` (default `100`)
 
+### Username behavior for info tools
+
+Applies to: `artist_get_info`, `track_get_info`, `album_get_info`.
+
+- If the incoming MCP HTTP request URI contains `?username=<value>`, the tool `username` field is **optional**.
+- If the request URI does **not** contain a `username` query parameter, the tool `username` field is **required**.
+- If both are provided, the tool input `username` value takes precedence over the query-string value.
+
+All exposed tools are annotated as read-only and non-destructive (`readOnlyHint: true`, `destructiveHint: false`).
+
 ## Environment variables
 
 Required:
