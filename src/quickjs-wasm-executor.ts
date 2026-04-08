@@ -1,5 +1,8 @@
 import { normalizeCode, sanitizeToolName, type Executor } from "@cloudflare/codemode";
-import { getQuickJSWASMModule } from "@cf-wasm/quickjs/workerd";
+import { DEBUG_SYNC as baseVariant, newQuickJSWASMModule } from "quickjs-emscripten";
+import { newVariant } from "quickjs-emscripten-core";
+import wasmModule from "./DEBUG_SYNC.wasm";
+import wasmSourceMapData from "./DEBUG_SYNC.wasm.map.txt";
 
 type ExecuteResult = Awaited<ReturnType<Executor["execute"]>>;
 type ProviderArg = Parameters<Executor["execute"]>[1];
@@ -9,6 +12,11 @@ type ResolvedProvider = {
   fns: Record<string, (...args: unknown[]) => Promise<unknown>>;
   positionalArgs?: boolean;
 };
+
+const cloudflareVariant = newVariant(baseVariant, {
+  wasmModule,
+  wasmSourceMapData,
+});
 
 export class QuickJsWasmExecutor implements Executor {
   #timeout: number;
@@ -20,7 +28,7 @@ export class QuickJsWasmExecutor implements Executor {
   async execute(code: string, providersOrFns: ProviderArg): Promise<ExecuteResult> {
     const providers = this.#normalizeProviders(providersOrFns);
     const normalizedCode = normalizeCode(code);
-    const quickjs = await getQuickJSWASMModule();
+    const quickjs = await newQuickJSWASMModule(cloudflareVariant);
     const vm = quickjs.newContext();
     const hostTasks = new Set<Promise<void>>();
 
