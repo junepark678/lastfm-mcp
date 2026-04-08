@@ -1,6 +1,23 @@
 import { normalizeCode, sanitizeToolName, type ExecuteResult, type Executor, type ResolvedProvider } from "@cloudflare/codemode";
 import { QuickJS } from "quickjs-wasi";
 
+const QUICKJS_WASM_URL = "https://unpkg.com/quickjs-wasi@2.2.0/quickjs.wasm";
+let quickJsWasmPromise: Promise<ArrayBuffer> | undefined;
+
+async function loadQuickJsWasm(): Promise<ArrayBuffer> {
+  if (!quickJsWasmPromise) {
+    quickJsWasmPromise = fetch(QUICKJS_WASM_URL).then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to download quickjs.wasm: HTTP ${response.status}`);
+      }
+
+      return await response.arrayBuffer();
+    });
+  }
+
+  return await quickJsWasmPromise;
+}
+
 export class QuickJsWasmExecutor implements Executor {
   async execute(
     code: string,
@@ -19,25 +36,29 @@ export class QuickJsWasmExecutor implements Executor {
       providerFns.set(provider.name, sanitizedFns);
     }
 
-    const vm = await QuickJS.create();
+    const vm = await QuickJS.create({ wasm: await loadQuickJsWasm() });
 
     try {
-      const callTool = vm.newFunction("__callTool", (_this, providerName, toolName, argsJson) => {
+      const callTool = vm.newFunction("__callTool", function (this: unknown, providerName, toolName, argsJson) {
         const deferred = vm.newPromise();
 
         Promise.resolve()
           .then(async () => {
-            const provider = providerFns.get(providerName.toString());
+            const providerNameValue = String(vm.dump(providerName));
+            const toolNameValue = String(vm.dump(toolName));
+            const argsJsonValue = String(vm.dump(argsJson));
+
+            const provider = providerFns.get(providerNameValue);
             if (!provider) {
-              throw new Error(`Provider \"${providerName.toString()}\" not found`);
+              throw new Error(`Provider \"${providerNameValue}\" not found`);
             }
 
-            const tool = provider[toolName.toString()];
+            const tool = provider[toolNameValue];
             if (!tool) {
-              throw new Error(`Tool \"${toolName.toString()}\" not found in provider \"${providerName.toString()}\"`);
+              throw new Error(`Tool \"${toolNameValue}\" not found in provider \"${providerNameValue}\"`);
             }
 
-            const parsed = JSON.parse(argsJson.toString()) as unknown[] | Record<string, unknown>;
+            const parsed = JSON.parse(argsJsonValue) as unknown[] | Record<string, unknown>;
             const result = Array.isArray(parsed)
               ? await tool(...parsed)
               : await tool(parsed);
