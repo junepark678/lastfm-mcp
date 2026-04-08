@@ -1,0 +1,5 @@
+LASTFM_API_KEY=your_lastfm_api_key
+LASTFM_API_BASE_URL=https://ws.audioscrobbler.com/2.0/
+LASTFM_USER_AGENT=lastfm-mcp-worker/0.1.0
+DEFAULT_PAGE_SIZE=10
+MAX_PAGE_SIZE=100

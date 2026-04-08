@@ -1,0 +1,7 @@
+name = "lastfm-mcp"
+main = "src/index.ts"
+compatibility_date = "2026-04-08"
+
+[vars]
+LASTFM_API_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
+LASTFM_USER_AGENT = "lastfm-mcp-worker/0.1.0"
