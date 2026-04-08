@@ -46,6 +46,26 @@ describe("LastfmClient error mapping", () => {
       details: { method: "artist.getInfo", lastfmErrorCode: 6 },
     });
   });
+
+  it("includes username in request URI when provided", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    await client.call("artist.getInfo", { artist: "Cher", username: "alice" });
+
+    const requestUrl = vi.mocked(fetch).mock.calls[0]?.[0];
+    expect(typeof requestUrl).toBe("string");
+    expect(new URL(requestUrl as string).searchParams.get("username")).toBe("alice");
+  });
+
+  it("omits username from request URI when omitted", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    await client.call("artist.getInfo", { artist: "Cher", username: undefined });
+
+    const requestUrl = vi.mocked(fetch).mock.calls[0]?.[0];
+    expect(typeof requestUrl).toBe("string");
+    expect(new URL(requestUrl as string).searchParams.has("username")).toBe(false);
+  });
 });
 
 describe("configuration and pagination", () => {

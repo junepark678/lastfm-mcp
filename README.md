@@ -34,6 +34,10 @@ List/search/chart tools support bounded pagination:
 - `limit >= 1`
 - effective `limit` is clamped to `MAX_PAGE_SIZE` (default `100`)
 
+Info tools also support an optional `username` parameter (`artist_get_info`, `track_get_info`, `album_get_info`). When provided, this is forwarded in the Last.fm request URI query string as `username=<value>`.
+
+All exposed tools are annotated as read-only and non-destructive (`readOnlyHint: true`, `destructiveHint: false`).
+
 ## Environment variables
 
 Required:
