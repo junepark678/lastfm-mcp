@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { LastfmClient, LastfmApiError } from "../src/lastfm";
-import { createUsernameSchema } from "../src/schemas";
+import { createUsernameSchema } from "../src/index";
 import { resolvePagination } from "../src/models";
 import { loadConfig } from "../src/config";
 
