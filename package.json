@@ -8,6 +8,7 @@
     "copy:quickjs-wasm": "./copy-wasm-file-into-src.sh",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "postinstall": "npm run copy:quickjs-wasm",
     "test": "vitest run",
     "test:e2e": "vitest run tests/wrangler.dev.test.ts tests/lastfm.e2e.test.ts"
   },

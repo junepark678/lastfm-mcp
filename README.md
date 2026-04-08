@@ -94,6 +94,7 @@ Optional:
    ```bash
    npm run copy:quickjs-wasm
    ```
+   (This also runs automatically on `npm install` via `postinstall`.)
 3. Copy env vars:
    ```bash
    cp .dev.vars.example .dev.vars
