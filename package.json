@@ -11,10 +11,10 @@
     "test:e2e": "vitest run tests/wrangler.dev.test.ts tests/lastfm.e2e.test.ts"
   },
   "dependencies": {
+    "@cf-wasm/quickjs": "^0.2.4",
     "@cloudflare/codemode": "^0.3.4",
     "@modelcontextprotocol/sdk": "^1.20.2",
     "agents": "^0.10.0",
-    "quickjs-emscripten": "^0.32.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
