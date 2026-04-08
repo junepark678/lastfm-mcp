@@ -90,15 +90,21 @@ Optional:
    ```bash
    npm install
    ```
-2. Copy env vars:
+2. Copy QuickJS Cloudflare Worker wasm assets:
+   ```bash
+   npm run copy:quickjs-wasm
+   ```
+3. Copy env vars:
    ```bash
    cp .dev.vars.example .dev.vars
    ```
-3. Set `LASTFM_API_KEY` in `.dev.vars`.
-4. Run worker:
+4. Set `LASTFM_API_KEY` in `.dev.vars`.
+5. Run worker:
    ```bash
    npm run dev
    ```
+
+When `quickjs-emscripten` is updated, run `npm run copy:quickjs-wasm` again to refresh `src/DEBUG_SYNC.wasm` and `src/DEBUG_SYNC.wasm.map.txt`.
 
 ## Deploy
 
