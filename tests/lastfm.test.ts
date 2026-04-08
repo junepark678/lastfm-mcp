@@ -78,6 +78,12 @@ describe("configuration and pagination", () => {
     expect(config.maxPageSize).toBe(50);
   });
 
+  it("fails fast when LASTFM_API_BASE_URL is invalid", () => {
+    expect(() => loadConfig({ LASTFM_API_KEY: "k", LASTFM_API_BASE_URL: "not a url" })).toThrow(
+      "LASTFM_API_BASE_URL must be a valid absolute URL",
+    );
+  });
+
   it("resolves pagination with upper bounds", () => {
     const result = resolvePagination({ page: 2, limit: 999 }, { defaultPageSize: 10, maxPageSize: 100 });
     expect(result).toEqual({ page: 2, limit: 100 });
