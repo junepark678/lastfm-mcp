@@ -1,36 +1,25 @@
+import { createMcpHandler } from "agents/mcp";
+import { DynamicWorkerExecutor } from "@cloudflare/codemode";
+import { codeMcpServer } from "@cloudflare/codemode/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
+import { createUserSchema, createUsernameSchema } from "./schemas";
 import { loadConfig, type EnvLike } from "./config";
 import { LastfmApiError, LastfmClient } from "./lastfm";
 import { resolvePagination } from "./models";
 
-interface Env extends EnvLike {}
+interface Env extends EnvLike {
+  LOADER: any;
+}
 
 const READ_ONLY_TOOL_HINTS = {
   readOnlyHint: true,
   destructiveHint: false,
 } as const;
 
-export function createUsernameSchema(usernameFromQuery?: string) {
-  if (usernameFromQuery) {
-    return z.string().min(1).optional();
-  }
-
-  return z.string().min(1);
-}
-
-function createUserSchema(usernameFromQuery?: string) {
-  if (usernameFromQuery) {
-    return z.string().min(1).optional();
-  }
-
-  return z.string().min(1);
-}
-
 function createServer(env: Env, usernameFromQuery?: string) {
   const config = loadConfig(env);
-  const server = new McpServer({ name: "lastfm-public-mcp", version: "0.2.0" });
+  const server = new McpServer({ name: "lastfm-public-mcp", version: "0.3.0" });
   const client = new LastfmClient(config);
   const usernameSchema = createUsernameSchema(usernameFromQuery);
   const userSchema = createUserSchema(usernameFromQuery);
@@ -230,20 +219,11 @@ function toolResult(data: unknown) {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const usernameFromQuery = new URL(request.url).searchParams.get("username") ?? undefined;
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true,
-    });
-
-    const server = createServer(env, usernameFromQuery);
-    await server.connect(transport);
-
-    try {
-      return await transport.handleRequest(request);
-    } finally {
-      await server.close();
-    }
+    const upstreamServer = createServer(env, usernameFromQuery);
+    const executor = new DynamicWorkerExecutor({ loader: env.LOADER });
+    const server = await codeMcpServer({ server: upstreamServer, executor });
+    return createMcpHandler(server)(request, env, ctx);
   },
 };
