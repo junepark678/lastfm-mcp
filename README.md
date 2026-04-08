@@ -2,7 +2,7 @@
 
 A public-only Last.fm MCP server designed for the Cloudflare Agents SDK.
 
-This deployment wraps the Last.fm MCP toolset in Cloudflare Codemode and exposes only a single `code` tool to MCP clients.
+This deployment wraps the Last.fm MCP toolset in Cloudflare Codemode and exposes only a single `code` tool to MCP clients, executed via a custom QuickJS-ng WASM executor.
 
 ## Public-only scope
 
@@ -76,7 +76,6 @@ All internal Last.fm tools are annotated as read-only and non-destructive (`read
 
 Required:
 - `LASTFM_API_KEY`
-- `LOADER` Worker Loader binding (configured in `wrangler.toml`)
 
 Optional:
 - `LASTFM_API_BASE_URL` (default `https://ws.audioscrobbler.com/2.0/`)
