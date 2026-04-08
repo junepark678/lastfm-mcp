@@ -1,8 +1,8 @@
 import { normalizeCode, sanitizeToolName, type Executor } from "@cloudflare/codemode";
-import { DEBUG_SYNC as baseVariant, newQuickJSWASMModule } from "quickjs-emscripten";
+import { RELEASE_SYNC as baseVariant, newQuickJSWASMModule } from "quickjs-emscripten";
 import { newVariant } from "quickjs-emscripten-core";
-import wasmModule from "./DEBUG_SYNC.wasm";
-import wasmSourceMapData from "./DEBUG_SYNC.wasm.map.txt";
+import wasmModule from "./RELEASE_SYNC.wasm";
+import browserModuleLoader from "./RELEASE_SYNC.emscripten.browser.mjs";
 
 type ExecuteResult = Awaited<ReturnType<Executor["execute"]>>;
 type ProviderArg = Parameters<Executor["execute"]>[1];
@@ -13,30 +13,32 @@ type ResolvedProvider = {
   positionalArgs?: boolean;
 };
 
-const workerdSafeBaseVariant = {
+const workerdSafeBaseVariant: typeof baseVariant = {
   ...baseVariant,
   importModuleLoader: async () => {
     const globalWithProcess = globalThis as typeof globalThis & { process?: unknown };
-    const originalProcess = globalWithProcess.process;
-    const hadOwnProcess = Object.prototype.hasOwnProperty.call(globalWithProcess, "process");
+    const baseModuleLoader = browserModuleLoader;
 
-    try {
-      if (hadOwnProcess) {
-        delete globalWithProcess.process;
+    return (async (moduleArg?: unknown) => {
+      const hadOwnProcess = Object.prototype.hasOwnProperty.call(globalWithProcess, "process");
+      const originalProcess = globalWithProcess.process;
+
+      try {
+        if (hadOwnProcess) {
+          delete globalWithProcess.process;
+        }
+        return await baseModuleLoader(moduleArg);
+      } finally {
+        if (hadOwnProcess) {
+          globalWithProcess.process = originalProcess;
+        }
       }
-      const moduleLoader = await baseVariant.importModuleLoader();
-      return moduleLoader;
-    } finally {
-      if (hadOwnProcess) {
-        globalWithProcess.process = originalProcess;
-      }
-    }
-  }
+    }) as Awaited<ReturnType<typeof baseVariant.importModuleLoader>>;
+  },
 };
 
 const cloudflareVariant = newVariant(workerdSafeBaseVariant, {
   wasmModule,
-  wasmSourceMapData,
 });
 
 export class QuickJsWasmExecutor implements Executor {

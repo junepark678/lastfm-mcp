@@ -105,7 +105,7 @@ Optional:
    npm run dev
    ```
 
-When `quickjs-emscripten` is updated, run `npm run copy:quickjs-wasm` again to refresh `src/DEBUG_SYNC.wasm` and `src/DEBUG_SYNC.wasm.map.txt`.
+When `quickjs-emscripten` is updated, run `npm run copy:quickjs-wasm` again to refresh `src/RELEASE_SYNC.wasm` and `src/RELEASE_SYNC.emscripten.browser.mjs`.
 
 ## Deploy
 
