@@ -7,33 +7,48 @@ import { resolvePagination } from "./models";
 
 interface Env extends EnvLike {}
 
-function createServer(env: Env) {
+const READ_ONLY_TOOL_HINTS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+} as const;
+
+export function createUsernameSchema(usernameFromQuery?: string) {
+  if (usernameFromQuery) {
+    return z.string().min(1).optional();
+  }
+
+  return z.string().min(1);
+}
+
+function createServer(env: Env, usernameFromQuery?: string) {
   const config = loadConfig(env);
   const server = new McpServer({ name: "lastfm-public-mcp", version: "0.2.0" });
   const client = new LastfmClient(config);
+  const usernameSchema = createUsernameSchema(usernameFromQuery);
 
   server.tool("artist_search", "Search public artists by name.", {
     artist: z.string().min(1),
     page: z.number().int().min(1).default(1),
     limit: z.number().int().min(1).default(config.defaultPageSize),
-  }, async ({ artist, page, limit }) => safeToolCall(async () => {
+  }, READ_ONLY_TOOL_HINTS, async ({ artist, page, limit }) => safeToolCall(async () => {
     const pagination = resolvePagination({ page, limit }, config);
     return client.call("artist.search", { artist, ...pagination });
   }));
 
   server.tool("artist_get_info", "Get public info for an artist.", {
     artist: z.string().min(1),
+    username: usernameSchema,
     autocorrect: z.number().int().min(0).max(1).default(1),
     lang: z.string().optional(),
-  }, async ({ artist, autocorrect, lang }) => safeToolCall(async () =>
-    client.call("artist.getInfo", { artist, autocorrect, lang })));
+  }, READ_ONLY_TOOL_HINTS, async ({ artist, username, autocorrect, lang }) => safeToolCall(async () =>
+    client.call("artist.getInfo", { artist, username: username ?? usernameFromQuery, autocorrect, lang })));
 
   server.tool("track_search", "Search public tracks by name.", {
     track: z.string().min(1),
     artist: z.string().optional(),
     page: z.number().int().min(1).default(1),
     limit: z.number().int().min(1).default(config.defaultPageSize),
-  }, async ({ track, artist, page, limit }) => safeToolCall(async () => {
+  }, READ_ONLY_TOOL_HINTS, async ({ track, artist, page, limit }) => safeToolCall(async () => {
     const pagination = resolvePagination({ page, limit }, config);
     return client.call("track.search", { track, artist, ...pagination });
   }));
@@ -41,22 +56,24 @@ function createServer(env: Env) {
   server.tool("track_get_info", "Get public info for a track.", {
     track: z.string().min(1),
     artist: z.string().min(1),
+    username: usernameSchema,
     autocorrect: z.number().int().min(0).max(1).default(1),
-  }, async ({ track, artist, autocorrect }) => safeToolCall(async () =>
-    client.call("track.getInfo", { track, artist, autocorrect })));
+  }, READ_ONLY_TOOL_HINTS, async ({ track, artist, username, autocorrect }) => safeToolCall(async () =>
+    client.call("track.getInfo", { track, artist, username: username ?? usernameFromQuery, autocorrect })));
 
   server.tool("album_get_info", "Get public info for an album.", {
     artist: z.string().min(1),
     album: z.string().min(1),
+    username: usernameSchema,
     autocorrect: z.number().int().min(0).max(1).default(1),
     lang: z.string().optional(),
-  }, async ({ artist, album, autocorrect, lang }) => safeToolCall(async () =>
-    client.call("album.getInfo", { artist, album, autocorrect, lang })));
+  }, READ_ONLY_TOOL_HINTS, async ({ artist, album, username, autocorrect, lang }) => safeToolCall(async () =>
+    client.call("album.getInfo", { artist, album, username: username ?? usernameFromQuery, autocorrect, lang })));
 
   server.tool("chart_get_top_artists", "Get top artists from Last.fm public charts.", {
     page: z.number().int().min(1).default(1),
     limit: z.number().int().min(1).default(config.defaultPageSize),
-  }, async ({ page, limit }) => safeToolCall(async () => {
+  }, READ_ONLY_TOOL_HINTS, async ({ page, limit }) => safeToolCall(async () => {
     const pagination = resolvePagination({ page, limit }, config);
     return client.call("chart.getTopArtists", pagination);
   }));
@@ -65,7 +82,7 @@ function createServer(env: Env) {
     tag: z.string().min(1),
     page: z.number().int().min(1).default(1),
     limit: z.number().int().min(1).default(config.defaultPageSize),
-  }, async ({ tag, page, limit }) => safeToolCall(async () => {
+  }, READ_ONLY_TOOL_HINTS, async ({ tag, page, limit }) => safeToolCall(async () => {
     const pagination = resolvePagination({ page, limit }, config);
     return client.call("tag.getTopTracks", { tag, ...pagination });
   }));
@@ -74,7 +91,7 @@ function createServer(env: Env) {
     country: z.string().min(1),
     page: z.number().int().min(1).default(1),
     limit: z.number().int().min(1).default(config.defaultPageSize),
-  }, async ({ country, page, limit }) => safeToolCall(async () => {
+  }, READ_ONLY_TOOL_HINTS, async ({ country, page, limit }) => safeToolCall(async () => {
     const pagination = resolvePagination({ page, limit }, config);
     return client.call("geo.getTopArtists", { country, ...pagination });
   }));
@@ -113,12 +130,13 @@ function toolResult(data: unknown) {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const usernameFromQuery = new URL(request.url).searchParams.get("username") ?? undefined;
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
 
-    const server = createServer(env);
+    const server = createServer(env, usernameFromQuery);
     await server.connect(transport);
 
     try {
