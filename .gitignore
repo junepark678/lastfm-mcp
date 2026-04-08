@@ -3,3 +3,5 @@ node_modules/
 .wrangler/
 src/RELEASE_SYNC.wasm
 src/RELEASE_SYNC.emscripten.browser.mjs
+src/DEBUG_SYNC.wasm
+src/DEBUG_SYNC.wasm.map.txt
