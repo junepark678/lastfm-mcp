@@ -28,13 +28,27 @@ export function loadConfig(env: EnvLike): LastfmConfig {
   const defaultPageSize = coercePositiveInt(env.DEFAULT_PAGE_SIZE, FALLBACK_DEFAULT_PAGE_SIZE);
   const maxPageSize = coercePositiveInt(env.MAX_PAGE_SIZE, FALLBACK_MAX_PAGE_SIZE);
 
+  const apiBaseUrl = env.LASTFM_API_BASE_URL?.trim() || DEFAULT_BASE_URL;
+  validateUrl(apiBaseUrl, "LASTFM_API_BASE_URL");
+
   return {
     apiKey,
-    apiBaseUrl: env.LASTFM_API_BASE_URL?.trim() || DEFAULT_BASE_URL,
+    apiBaseUrl,
     userAgent: env.LASTFM_USER_AGENT?.trim() || DEFAULT_USER_AGENT,
     defaultPageSize: Math.min(defaultPageSize, maxPageSize),
     maxPageSize,
   };
+}
+
+function validateUrl(value: string, envKey: string): void {
+  try {
+    const parsed = new URL(value);
+    if (!parsed.protocol || !parsed.hostname) {
+      throw new Error("missing URL components");
+    }
+  } catch {
+    throw new Error(`${envKey} must be a valid absolute URL`);
+  }
 }
 
 function coercePositiveInt(value: string | undefined, fallback: number): number {

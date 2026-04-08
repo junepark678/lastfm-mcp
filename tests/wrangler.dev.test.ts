@@ -26,22 +26,17 @@ async function parseMcpResponse(response: Response): Promise<JsonRpcResponse> {
 
 describe("wrangler local development", () => {
   let worker: UnstableDevWorker;
+  let sessionId: string | undefined;
 
   beforeAll(async () => {
     worker = await unstable_dev("src/index.ts", {
       experimental: { disableExperimentalWarning: true },
       vars: {
-        LASTFM_API_KEY: "test-key",
+        LASTFM_API_KEY: process.env.LASTFM_API_KEY ?? "test-key",
         LASTFM_API_BASE_URL: "https://ws.audioscrobbler.com/2.0/",
       },
     });
-  }, 60_000);
 
-  afterAll(async () => {
-    await worker?.stop();
-  });
-
-  it("supports initialize and exposes code mode tools in wrangler local dev", async () => {
     const initializeResponse = await worker.fetch("/mcp", {
       method: "POST",
       headers: mcpHeaders(),
@@ -58,10 +53,16 @@ describe("wrangler local development", () => {
     });
 
     expect(initializeResponse.status).toBe(200);
-    const sessionId = initializeResponse.headers.get("mcp-session-id") ?? undefined;
+    sessionId = initializeResponse.headers.get("mcp-session-id") ?? undefined;
     const initializeBody = await parseMcpResponse(initializeResponse);
     expect((initializeBody.result?.serverInfo as { name?: string } | undefined)?.name).toBe("codemode");
+  }, 60_000);
 
+  afterAll(async () => {
+    await worker?.stop();
+  });
+
+  it("supports initialize and exposes code mode tools in wrangler local dev", async () => {
     const toolsListResponse = await worker.fetch("/mcp", {
       method: "POST",
       headers: mcpHeaders(sessionId),
@@ -70,7 +71,39 @@ describe("wrangler local development", () => {
 
     expect(toolsListResponse.status).toBe(200);
     const toolsListBody = await parseMcpResponse(toolsListResponse);
-    const toolNames = ((toolsListBody.result?.tools as Array<{ name?: string }> | undefined) ?? []).map((tool) => tool.name);
+    const tools = (toolsListBody.result?.tools as Array<{ name?: string; annotations?: Record<string, boolean> }> | undefined) ?? [];
+    const toolNames = tools.map((tool) => tool.name);
     expect(toolNames).toContain("code");
+    const codeTool = tools.find((tool) => tool.name === "code");
+    expect(codeTool?.annotations?.readOnlyHint).toBe(true);
+    expect(codeTool?.annotations?.destructiveHint).toBe(false);
+    expect(codeTool?.annotations?.openWorldHint).toBe(true);
+  }, 30_000);
+
+  it("executes code mode and can call Last.fm-backed tools", async () => {
+    const callResponse = await worker.fetch("/mcp", {
+      method: "POST",
+      headers: mcpHeaders(sessionId),
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "code",
+          arguments: {
+            code: "async () => await codemode.user_get_info({ user: 'RJ' })",
+          },
+        },
+      }),
+    });
+
+    expect(callResponse.status).toBe(200);
+    const callBody = await parseMcpResponse(callResponse);
+    const result = callBody.result as { content?: Array<{ text?: string }>; isError?: boolean } | undefined;
+    const textPayload = result?.content?.[0]?.text ?? "";
+
+    expect(textPayload).not.toContain("Invalid URL string");
+    expect(textPayload).not.toContain("Provider");
+    expect(textPayload.length).toBeGreaterThan(0);
   }, 30_000);
 });
