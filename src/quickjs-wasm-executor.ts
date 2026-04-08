@@ -53,6 +53,8 @@ export class QuickJsWasmExecutor implements Executor {
             const response = vm.newString(JSON.stringify({ error: message }));
             deferred.resolve(response);
             response.dispose();
+          } finally {
+            deferred.dispose();
           }
         })();
         hostTasks.add(task);
