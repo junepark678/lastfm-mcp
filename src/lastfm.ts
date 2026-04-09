@@ -1,4 +1,5 @@
 import type { LastfmConfig } from "./config";
+import * as Sentry from "@sentry/cloudflare";
 
 export class LastfmApiError extends Error {
   constructor(
@@ -64,41 +65,57 @@ export class LastfmClient {
       }
     }
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        "User-Agent": this.config.userAgent,
+    return Sentry.startSpan(
+      {
+        name: `lastfm.${method}`,
+        op: "http.client",
+        attributes: {
+          "lastfm.method": method,
+          "http.request.method": "GET",
+          "server.address": url.hostname,
+          "url.full": redactLastfmUrl(url),
+        },
       },
-    });
+      async (span) => {
+        const response = await fetch(url.toString(), {
+          headers: {
+            "User-Agent": this.config.userAgent,
+          },
+        });
 
-    let data: unknown;
-    try {
-      data = await response.json();
-    } catch {
-      throw new LastfmApiError("Last.fm returned non-JSON response", {
-        method,
-        status: response.status,
-        retriable: response.status >= 500,
-      });
-    }
+        span?.setAttribute("http.response.status_code", response.status);
 
-    if (!response.ok) {
-      throw new LastfmApiError(`HTTP error from Last.fm: ${response.status}`, {
-        method,
-        status: response.status,
-        retriable: response.status >= 500 || response.status === 429,
-      });
-    }
+        let data: unknown;
+        try {
+          data = await response.json();
+        } catch {
+          throw new LastfmApiError("Last.fm returned non-JSON response", {
+            method,
+            status: response.status,
+            retriable: response.status >= 500,
+          });
+        }
 
-    if (isLastfmError(data)) {
-      throw new LastfmApiError(data.message, {
-        method,
-        status: response.status,
-        lastfmErrorCode: data.error,
-        retriable: response.status >= 500 || data.error === 11 || data.error === 16,
-      });
-    }
+        if (!response.ok) {
+          throw new LastfmApiError(`HTTP error from Last.fm: ${response.status}`, {
+            method,
+            status: response.status,
+            retriable: response.status >= 500 || response.status === 429,
+          });
+        }
 
-    return data;
+        if (isLastfmError(data)) {
+          throw new LastfmApiError(data.message, {
+            method,
+            status: response.status,
+            lastfmErrorCode: data.error,
+            retriable: response.status >= 500 || data.error === 11 || data.error === 16,
+          });
+        }
+
+        return data;
+      },
+    );
   }
 }
 
@@ -106,4 +123,10 @@ function isLastfmError(value: unknown): value is { error: number; message: strin
   if (!value || typeof value !== "object") return false;
   const maybe = value as Record<string, unknown>;
   return typeof maybe.error === "number" && typeof maybe.message === "string";
+}
+
+function redactLastfmUrl(url: URL): string {
+  const sanitized = new URL(url.toString());
+  sanitized.searchParams.delete("api_key");
+  return sanitized.toString();
 }

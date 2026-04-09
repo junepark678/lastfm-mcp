@@ -12,6 +12,11 @@ export interface EnvLike {
   LASTFM_USER_AGENT?: string;
   DEFAULT_PAGE_SIZE?: string;
   MAX_PAGE_SIZE?: string;
+  SENTRY_DSN?: string;
+  SENTRY_ENVIRONMENT?: string;
+  SENTRY_RELEASE?: string;
+  SENTRY_TRACES_SAMPLE_RATE?: string;
+  SENTRY_SEND_DEFAULT_PII?: string;
 }
 
 const DEFAULT_BASE_URL = "https://ws.audioscrobbler.com/2.0/";

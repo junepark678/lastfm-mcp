@@ -83,6 +83,11 @@ Optional:
 - `LASTFM_USER_AGENT` (default `lastfm-mcp-worker/0.1.0`)
 - `DEFAULT_PAGE_SIZE` (default `10`)
 - `MAX_PAGE_SIZE` (default `100`)
+- `SENTRY_DSN` (enables Sentry when set)
+- `SENTRY_ENVIRONMENT`
+- `SENTRY_RELEASE`
+- `SENTRY_TRACES_SAMPLE_RATE` (float between `0` and `1`, default `0`)
+- `SENTRY_SEND_DEFAULT_PII` (`true` to include request/user-derived PII in captured events)
 
 ## Local development
 
