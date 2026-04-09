@@ -1,0 +1,19 @@
+diff --git a/package.json b/package.json
+index f89d74e27ee20d1af2d3566d3cc069890c60ae41..a010065b9ebd817a7db5cdb65ba52a318cec9c02 100644
+--- a/package.json
++++ b/package.json
+@@ -111,9 +111,11 @@
+     }
+   },
+   "dependencies": {
+-    "@jitl/quickjs-wasmfile-debug-sync": "0.31.0",
+-    "@jitl/quickjs-wasmfile-release-sync": "0.31.0",
+-    "quickjs-emscripten-core": "0.31.0"
++    "@jitl/quickjs-ng-wasmfile-debug-sync": "0.32.0",
++    "@jitl/quickjs-ng-wasmfile-release-sync": "0.32.0",
++    "@jitl/quickjs-wasmfile-debug-sync": "npm:@jitl/quickjs-ng-wasmfile-debug-sync@0.32.0",
++    "@jitl/quickjs-wasmfile-release-sync": "npm:@jitl/quickjs-ng-wasmfile-release-sync@0.32.0",
++    "quickjs-emscripten-core": "0.32.0"
+   },
+   "devDependencies": {
+     "@types/node": "^24.10.1",

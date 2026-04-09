@@ -2,7 +2,7 @@
 
 A public-only Last.fm MCP server designed for the Cloudflare Agents SDK.
 
-This deployment wraps the Last.fm MCP toolset in Cloudflare Codemode and exposes only a single `code` tool to MCP clients, executed via a custom QuickJS-ng WASM executor.
+This deployment wraps the Last.fm MCP toolset in Cloudflare Codemode and exposes only a single `code` tool to MCP clients, executed via a custom QuickJS-ng WASM executor built on `@cf-wasm/quickjs`'s `workerd` packaging.
 
 ## Public-only scope
 
@@ -88,33 +88,28 @@ Optional:
 
 1. Install dependencies:
    ```bash
-   npm install
+   bun install
    ```
-2. Copy QuickJS Cloudflare Worker wasm assets:
-   ```bash
-   npm run copy:quickjs-wasm
-   ```
-   (This also runs automatically on `npm install` via `postinstall`.)
-3. Copy env vars:
+2. Copy env vars:
    ```bash
    cp .dev.vars.example .dev.vars
    ```
-4. Set `LASTFM_API_KEY` in `.dev.vars`.
-5. Run worker:
+3. Set `LASTFM_API_KEY` in `.dev.vars`.
+4. Run worker:
    ```bash
-   npm run dev
+   bun run dev
    ```
 
-When `quickjs-emscripten` is updated, run `npm run copy:quickjs-wasm` again to refresh `src/RELEASE_SYNC.wasm` and `src/RELEASE_SYNC.emscripten.browser.mjs`.
+This repo uses Bun for package management and carries a local Bun patch for `@cf-wasm/quickjs` so its QuickJS-ng Worker dependencies stay aligned on `0.32.0`. Node and Wrangler remain the runtime/tooling environment.
 
 ## Deploy
 
 ```bash
-npm run deploy
+bun run deploy
 ```
 
 ## Testing
 
 ```bash
-npm test
+bun run test
 ```
