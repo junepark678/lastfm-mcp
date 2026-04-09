@@ -1,8 +1,5 @@
 import { normalizeCode, sanitizeToolName, type Executor } from "@cloudflare/codemode";
-import { RELEASE_SYNC as baseVariant, newQuickJSWASMModule } from "quickjs-emscripten";
-import { newVariant } from "quickjs-emscripten-core";
-import wasmModule from "./RELEASE_SYNC.wasm";
-import browserModuleLoader from "./RELEASE_SYNC.emscripten.browser.mjs";
+import { getQuickJSWASMModule } from "@cf-wasm/quickjs/workerd";
 
 type ExecuteResult = Awaited<ReturnType<Executor["execute"]>>;
 type ProviderArg = Parameters<Executor["execute"]>[1];
@@ -12,34 +9,6 @@ type ResolvedProvider = {
   fns: Record<string, (...args: unknown[]) => Promise<unknown>>;
   positionalArgs?: boolean;
 };
-
-const workerdSafeBaseVariant: typeof baseVariant = {
-  ...baseVariant,
-  importModuleLoader: async () => {
-    const globalWithProcess = globalThis as typeof globalThis & { process?: unknown };
-    const baseModuleLoader = browserModuleLoader;
-
-    return (async (moduleArg?: unknown) => {
-      const hadOwnProcess = Object.prototype.hasOwnProperty.call(globalWithProcess, "process");
-      const originalProcess = globalWithProcess.process;
-
-      try {
-        if (hadOwnProcess) {
-          delete globalWithProcess.process;
-        }
-        return await baseModuleLoader(moduleArg);
-      } finally {
-        if (hadOwnProcess) {
-          globalWithProcess.process = originalProcess;
-        }
-      }
-    }) as Awaited<ReturnType<typeof baseVariant.importModuleLoader>>;
-  },
-};
-
-const cloudflareVariant = newVariant(workerdSafeBaseVariant, {
-  wasmModule,
-});
 
 export class QuickJsWasmExecutor implements Executor {
   #timeout: number;
@@ -51,92 +20,90 @@ export class QuickJsWasmExecutor implements Executor {
   async execute(code: string, providersOrFns: ProviderArg): Promise<ExecuteResult> {
     const providers = this.#normalizeProviders(providersOrFns);
     const normalizedCode = normalizeCode(code);
-    const quickjs = await newQuickJSWASMModule(cloudflareVariant);
+    const quickjs = await getQuickJSWASMModule();
     const vm = quickjs.newContext();
-    const hostTasks = new Set<Promise<void>>();
+    let drainHostQueue:
+      | ReturnType<typeof vm.getProp>
+      | undefined;
+    let resolveHostCall:
+      | ReturnType<typeof vm.getProp>
+      | undefined;
 
     try {
-      const hostCall = vm.newFunction("__hostCall", (...rawArgs) => {
-        const [providerHandle, toolHandle, payloadHandle] = rawArgs;
-        const providerName = providerHandle ? String(vm.dump(providerHandle)) : "";
-        const toolName = toolHandle ? String(vm.dump(toolHandle)) : "";
-        const payload = payloadHandle ? vm.dump(payloadHandle) : undefined;
-
-        const provider = providers.find((entry) => entry.name === providerName);
-        if (!provider) {
-          return vm.newString(JSON.stringify({ error: `Unknown provider: ${providerName}` }));
-        }
-
-        const fn = provider.fns[sanitizeToolName(toolName)];
-        if (!fn) {
-          return vm.newString(JSON.stringify({ error: `Unknown tool: ${providerName}.${toolName}` }));
-        }
-
-        const deferred = vm.newPromise();
-        const task = (async () => {
-          try {
-            const result = provider.positionalArgs ? await fn(...(Array.isArray(payload) ? payload : [])) : await fn(payload ?? {});
-            const response = vm.newString(JSON.stringify({ result }));
-            deferred.resolve(response);
-            response.dispose();
-          } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
-            const response = vm.newString(JSON.stringify({ error: message }));
-            deferred.resolve(response);
-            response.dispose();
-          } finally {
-            deferred.dispose();
-          }
-        })();
-        hostTasks.add(task);
-        task.finally(() => hostTasks.delete(task));
-
-        return deferred.handle;
-      });
-
-      vm.setProp(vm.global, "__hostCall", hostCall);
-      hostCall.dispose();
-
       const providerConfigJson = JSON.stringify(providers.map((provider) => ({
         name: provider.name,
         positionalArgs: provider.positionalArgs ?? false,
       })));
+      const providerBindings = providers.map((provider) => (
+        `const ${provider.name} = __providers[${JSON.stringify(provider.name)}];`
+      )).join("\n");
 
       const runtimeCode = `
         (async () => {
+          "use strict";
           const __logs = [];
-          globalThis.console = {
+          const console = {
             log: (...a) => __logs.push(a.map(String).join(" ")),
             warn: (...a) => __logs.push("[warn] " + a.map(String).join(" ")),
             error: (...a) => __logs.push("[error] " + a.map(String).join(" ")),
           };
+          const __hostQueue = [];
+          const __pendingHostCalls = new Map();
+          let __nextHostCallId = 1;
+
+          globalThis.__drainHostQueue = () => JSON.stringify(__hostQueue.splice(0, __hostQueue.length));
+          globalThis.__resolveHostCall = (id, payloadJson) => {
+            const pending = __pendingHostCalls.get(id);
+            if (!pending) {
+              return false;
+            }
+            __pendingHostCalls.delete(id);
+            const payload = JSON.parse(payloadJson);
+            if (payload.error) {
+              pending.reject(new Error(payload.error));
+            } else {
+              pending.resolve(payload.result);
+            }
+            return true;
+          };
 
           const __providerConfig = ${providerConfigJson};
+          const __providers = {};
           for (const provider of __providerConfig) {
-            globalThis[provider.name] = new Proxy({}, {
+            __providers[provider.name] = new Proxy({}, {
               get: (_, toolName) => {
                 if (provider.positionalArgs) {
                   return async (...args) => {
-                    const res = JSON.parse(await __hostCall(provider.name, String(toolName), args));
-                    if (res.error) throw new Error(res.error);
-                    return res.result;
+                    return new Promise((resolve, reject) => {
+                      const id = __nextHostCallId++;
+                      __pendingHostCalls.set(id, { resolve, reject });
+                      __hostQueue.push({
+                        id,
+                        providerName: provider.name,
+                        toolName: String(toolName),
+                        payload: args,
+                      });
+                    });
                   };
                 }
 
-                return async (args = {}) => {
-                  const res = JSON.parse(await __hostCall(provider.name, String(toolName), args));
-                  if (res.error) throw new Error(res.error);
-                  return res.result;
+                return (args = {}) => new Promise((resolve, reject) => {
+                  const id = __nextHostCallId++;
+                  __pendingHostCalls.set(id, { resolve, reject });
+                  __hostQueue.push({
+                    id,
+                    providerName: provider.name,
+                    toolName: String(toolName),
+                    payload: args,
+                  });
                 };
               }
             });
           }
+          ${providerBindings}
 
           try {
-            const result = await Promise.race([
-              (${normalizedCode})(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error("Execution timed out")), ${this.#timeout})),
-            ]);
+            const result = await (${normalizedCode})();
             return JSON.stringify({ result, logs: __logs });
           } catch (error) {
             return JSON.stringify({
@@ -144,7 +111,7 @@ export class QuickJsWasmExecutor implements Executor {
               logs: __logs,
             });
           }
-        })();
+        })()
       `;
 
       const evalResult = vm.evalCode(runtimeCode, "executor.js");
@@ -154,14 +121,69 @@ export class QuickJsWasmExecutor implements Executor {
         return { result: undefined, error };
       }
 
-      let resolved: Awaited<ReturnType<typeof vm.resolvePromise>> | undefined;
-      let resolveError: unknown;
-      vm.resolvePromise(evalResult.value)
-        .then((value) => { resolved = value; })
-        .catch((error: unknown) => { resolveError = error; });
+      drainHostQueue = vm.getProp(vm.global, "__drainHostQueue");
+      resolveHostCall = vm.getProp(vm.global, "__resolveHostCall");
 
+      let promiseState = vm.getPromiseState(evalResult.value);
       const deadline = Date.now() + this.#timeout;
-      while (!resolved && !resolveError && Date.now() < deadline) {
+      while (promiseState.type === "pending" && Date.now() < deadline) {
+        const drainResult = vm.callFunction(drainHostQueue, vm.undefined);
+        if (drainResult.error) {
+          const error = String(vm.dump(drainResult.error));
+          drainResult.error.dispose();
+          evalResult.value.dispose();
+          return { result: undefined, error };
+        }
+
+        const queuedJson = String(vm.dump(drainResult.value));
+        drainResult.value.dispose();
+        const queuedCalls = JSON.parse(queuedJson) as Array<{
+          id: number;
+          providerName: string;
+          toolName: string;
+          payload: unknown;
+        }>;
+
+        for (const queuedCall of queuedCalls) {
+          const provider = providers.find((entry) => entry.name === queuedCall.providerName);
+          const response = await (async () => {
+            if (!provider) {
+              return { error: `Unknown provider: ${queuedCall.providerName}` };
+            }
+
+            const fn = provider.fns[sanitizeToolName(queuedCall.toolName)];
+            if (!fn) {
+              return { error: `Unknown tool: ${queuedCall.providerName}.${queuedCall.toolName}` };
+            }
+
+            try {
+              const result = provider.positionalArgs
+                ? await fn(...(Array.isArray(queuedCall.payload) ? queuedCall.payload : []))
+                : await fn(queuedCall.payload ?? {});
+              return { result };
+            } catch (error: unknown) {
+              return {
+                error: error instanceof Error ? error.message : String(error),
+              };
+            }
+          })();
+
+          const idHandle = vm.newNumber(queuedCall.id);
+          const payloadHandle = vm.newString(JSON.stringify(response));
+          const settleResult = vm.callFunction(resolveHostCall, vm.undefined, idHandle, payloadHandle);
+          idHandle.dispose();
+          payloadHandle.dispose();
+
+          if (settleResult.error) {
+            const error = String(vm.dump(settleResult.error));
+            settleResult.error.dispose();
+            evalResult.value.dispose();
+            return { result: undefined, error };
+          }
+
+          settleResult.value.dispose();
+        }
+
         const pending = vm.runtime.executePendingJobs();
         if (pending.error) {
           const error = String(vm.dump(pending.error));
@@ -169,28 +191,24 @@ export class QuickJsWasmExecutor implements Executor {
           evalResult.value.dispose();
           return { result: undefined, error };
         }
+        promiseState = vm.getPromiseState(evalResult.value);
         await new Promise((resolve) => setTimeout(resolve, 1));
       }
-      evalResult.value.dispose();
-
-      if (resolveError) {
-        return {
-          result: undefined,
-          error: resolveError instanceof Error ? resolveError.message : String(resolveError),
-        };
-      }
-      if (!resolved) {
+      if (promiseState.type === "pending") {
+        evalResult.value.dispose();
         return { result: undefined, error: "Execution timed out" };
       }
 
-      if (resolved.error) {
-        const error = String(vm.dump(resolved.error));
-        resolved.error.dispose();
+      if (promiseState.type === "rejected") {
+        const error = String(vm.dump(promiseState.error));
+        promiseState.error.dispose();
+        evalResult.value.dispose();
         return { result: undefined, error };
       }
 
-      const payload = vm.dump(resolved.value);
-      resolved.value.dispose();
+      const payload = vm.dump(promiseState.value);
+      promiseState.value.dispose();
+      evalResult.value.dispose();
       const parsed = JSON.parse(String(payload)) as ExecuteResult;
       return {
         result: parsed.result,
@@ -203,10 +221,10 @@ export class QuickJsWasmExecutor implements Executor {
         error: error instanceof Error ? error.message : String(error),
       };
     } finally {
-      if (hostTasks.size > 0) {
-        await Promise.allSettled([...hostTasks]);
-      }
-      for (let i = 0; i < 5; i += 1) {
+      drainHostQueue?.dispose();
+      resolveHostCall?.dispose();
+      const cleanupDeadline = Date.now() + 100;
+      while (Date.now() < cleanupDeadline) {
         const pending = vm.runtime.executePendingJobs();
         if (pending.error) {
           pending.error.dispose();
@@ -215,6 +233,7 @@ export class QuickJsWasmExecutor implements Executor {
         if ((pending.value ?? 0) === 0) {
           break;
         }
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
       vm.dispose();
     }
