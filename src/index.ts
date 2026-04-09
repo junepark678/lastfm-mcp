@@ -7,6 +7,8 @@ import { loadConfig, type EnvLike } from "./config";
 import { LastfmApiError, LastfmClient } from "./lastfm";
 import { resolvePagination } from "./models";
 import { QuickJsWasmExecutor } from "./quickjs-wasm-executor";
+import * as Sentry from "@sentry/cloudflare";
+
 
 type Env = EnvLike;
 
@@ -221,7 +223,17 @@ function toolResult(data: unknown) {
   };
 }
 
-export default {
+export default Sentry.withSentry(
+  (env: Env) => ({
+    dsn: "https://2a6ae4160ca0f94a87340b22fff9e1a5@o4511188134789120.ingest.us.sentry.io/4511188141670400",
+
+    // Send structured logs to Sentry
+    enableLogs: true,
+
+    // Setting this option to true will send default PII data to Sentry.
+    // For example, automatic IP address collection on events
+    sendDefaultPii: true,
+  }), {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const requestUrl = (() => {
       try {
@@ -244,4 +256,4 @@ export default {
     }
     return createMcpHandler(server)(request, env, ctx);
   },
-};
+});
