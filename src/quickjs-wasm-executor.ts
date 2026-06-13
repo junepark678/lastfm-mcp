@@ -1,5 +1,6 @@
 import { normalizeCode, sanitizeToolName, type Executor } from "@cloudflare/codemode";
-import { getQuickJSWASMModule } from "@cf-wasm/quickjs/workerd";
+import quickjsVariant from "@jitl/quickjs-singlefile-cjs-release-sync";
+import { newQuickJSWASMModuleFromVariant } from "quickjs-emscripten-core";
 import * as Sentry from "@sentry/cloudflare";
 
 type ExecuteResult = Awaited<ReturnType<Executor["execute"]>>;
@@ -35,7 +36,7 @@ export class QuickJsWasmExecutor implements Executor {
 
         const quickjs = await Sentry.startSpan(
           { name: "quickjs.load_module", op: "codemode.executor.init" },
-          () => getQuickJSWASMModule(),
+          () => newQuickJSWASMModuleFromVariant(quickjsVariant),
         );
         const vm = quickjs.newContext();
         let drainHostQueue:
