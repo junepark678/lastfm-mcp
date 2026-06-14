@@ -17,6 +17,9 @@ export interface EnvLike {
   SENTRY_RELEASE?: string;
   SENTRY_TRACES_SAMPLE_RATE?: string;
   SENTRY_SEND_DEFAULT_PII?: string;
+  CF_VERSION_METADATA?: {
+    id?: string;
+  };
 }
 
 const DEFAULT_BASE_URL = "https://ws.audioscrobbler.com/2.0/";

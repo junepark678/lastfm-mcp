@@ -77,6 +77,11 @@ export class LastfmClient {
         },
       },
       async (span) => {
+        Sentry.logger.info("Calling Last.fm API", {
+          "lastfm.method": method,
+          "server.address": url.hostname,
+        });
+
         const response = await fetch(url.toString(), {
           headers: {
             "User-Agent": this.config.userAgent,
@@ -84,11 +89,19 @@ export class LastfmClient {
         });
 
         span?.setAttribute("http.response.status_code", response.status);
+        Sentry.logger.info("Last.fm API response received", {
+          "lastfm.method": method,
+          "http.response.status_code": response.status,
+        });
 
         let data: unknown;
         try {
           data = await response.json();
         } catch {
+          Sentry.logger.warn("Last.fm API returned non-JSON response", {
+            "lastfm.method": method,
+            "http.response.status_code": response.status,
+          });
           throw new LastfmApiError("Last.fm returned non-JSON response", {
             method,
             status: response.status,
@@ -97,6 +110,10 @@ export class LastfmClient {
         }
 
         if (!response.ok) {
+          Sentry.logger.warn("Last.fm API HTTP error", {
+            "lastfm.method": method,
+            "http.response.status_code": response.status,
+          });
           throw new LastfmApiError(`HTTP error from Last.fm: ${response.status}`, {
             method,
             status: response.status,
@@ -105,6 +122,11 @@ export class LastfmClient {
         }
 
         if (isLastfmError(data)) {
+          Sentry.logger.warn("Last.fm API application error", {
+            "lastfm.method": method,
+            "http.response.status_code": response.status,
+            "lastfm.error_code": data.error,
+          });
           throw new LastfmApiError(data.message, {
             method,
             status: response.status,

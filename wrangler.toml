@@ -6,10 +6,15 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 LASTFM_API_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
 LASTFM_USER_AGENT = "lastfm-mcp-worker/0.1.0"
+SENTRY_TRACES_SAMPLE_RATE = "1.0"
+SENTRY_SEND_DEFAULT_PII = "false"
 
 [secrets]
 required = [ "LASTFM_API_KEY" ]
 optional = [ "SENTRY_DSN" ]
+
+[version_metadata]
+binding = "CF_VERSION_METADATA"
 
 [observability]
 enabled = false

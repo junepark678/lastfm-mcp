@@ -203,6 +203,12 @@ async function safeToolCall(fn: () => Promise<unknown>) {
     return toolResult(data);
   } catch (error: unknown) {
     if (error instanceof LastfmApiError) {
+      Sentry.logger.warn("Last.fm tool call failed", {
+        "lastfm.method": error.details.method,
+        "http.response.status_code": error.details.status,
+        "lastfm.error_code": error.details.lastfmErrorCode,
+        "lastfm.retriable": error.details.retriable,
+      });
       captureLastfmFailure(error);
       return {
         isError: true,
@@ -212,6 +218,9 @@ async function safeToolCall(fn: () => Promise<unknown>) {
     }
 
     Sentry.captureException(asError(error));
+    Sentry.logger.error("Unexpected MCP tool call failure", {
+      "error.type": asError(error).name,
+    });
     return {
       isError: true,
       content: [{ type: "text" as const, text: JSON.stringify({ error: "Unexpected server error" }, null, 2) }],
@@ -238,7 +247,7 @@ export default Sentry.withSentry(
     return {
       dsn,
       environment: env.SENTRY_ENVIRONMENT?.trim(),
-      release: env.SENTRY_RELEASE?.trim(),
+      release: env.SENTRY_RELEASE?.trim() || env.CF_VERSION_METADATA?.id,
       tracesSampleRate: parseSampleRate(env.SENTRY_TRACES_SAMPLE_RATE),
       enableLogs: true,
       sendDefaultPii: parseBoolean(env.SENTRY_SEND_DEFAULT_PII),
@@ -267,6 +276,12 @@ export default Sentry.withSentry(
       pathname: requestUrl.pathname,
       search: requestUrl.search,
       has_username_query: Boolean(usernameFromQuery),
+    });
+    Sentry.logger.info("MCP request received", {
+      "http.request.method": request.method,
+      "url.path": requestUrl.pathname,
+      "mcp.transport": "streamable_http",
+      "mcp.has_username_query": Boolean(usernameFromQuery),
     });
 
     return Sentry.startSpan({ name: "mcp.request", op: "mcp.server" }, async () => {
@@ -319,7 +334,7 @@ function asError(error: unknown): Error {
 
 function parseSampleRate(value: string | undefined): number {
   const parsed = Number.parseFloat(value ?? "");
-  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0;
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 1;
 }
 
 function parseBoolean(value: string | undefined): boolean {
